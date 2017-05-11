@@ -247,4 +247,55 @@ function _M.delete(primary_keys, dao_collection)
   end
 end
 
+--- Generates generic endpoints for an entity
+function _M.generate_generic_route(entity_name, primary_key)
+  return {
+    ["/"..entity_name.."/"] = {
+      GET = function(self, dao_factory)
+        _M.paginated_set(self, dao_factory[entity_name])
+      end,
+
+      PUT = function(self, dao_factory)
+        _M.put(self.params, dao_factory[entity_name])
+      end,
+
+      POST = function(self, dao_factory)
+        _M.post(self.params, dao_factory[entity_name])
+      end
+    },
+
+    ["/"..entity_name.."/:primary_key"] = {
+      before = function(self, dao_factory, helpers)
+        local entities, err = _M.find_by_id_or_field(
+          dao_factory[entity_name],
+          { [primary_key] = self.params.primary_key },
+          self.params.primary_key,
+          primary_key
+        )
+
+        if err then
+          return helpers.yield_error(err)
+        elseif next(entities) == nil then
+          return helpers.responses.send_HTTP_NOT_FOUND()
+        end
+        self.params.primary_key = nil
+
+        self.entity = entities[1]
+      end,
+
+      GET = function(self, dao_factory, helpers)
+        return helpers.responses.send_HTTP_OK(self.entity)
+      end,
+
+      PATCH = function(self, dao_factory)
+        _M.patch(self.params, dao_factory[entity_name], self.entity)
+      end,
+
+      DELETE = function(self, dao_factory)
+        _M.delete(self.entity, dao_factory[entity_name])
+      end
+    }
+  }
+end
+
 return _M
